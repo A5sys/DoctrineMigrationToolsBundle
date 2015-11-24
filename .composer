@@ -1,0 +1,14 @@
+{
+    "name": "a5sys/doctrine-migration-tools-bundle",
+    "type": "symfony-bundle",
+    "autoload": {
+        "psr-4": { "A5sys\\DoctrineMigrationToolsBundle\\": "" }
+    },
+    "license": "MIT",
+    "require": {
+        "php": ">=5.4.0",
+        "symfony/framework-bundle": "~2.3|~3.0",
+        "doctrine/doctrine-bundle": "~1.0",
+        "doctrine/migrations": "~1.0"
+    }
+}
