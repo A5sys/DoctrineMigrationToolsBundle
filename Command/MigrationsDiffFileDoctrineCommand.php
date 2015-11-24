@@ -13,7 +13,7 @@ use Symfony\Component\Console\Output\OutputInterface;
  * Command for generate migration classes by comparing your your mapping information to a file that contains the last definition
  *
  */
-class MigrationsDiffFileDoctrineCommand extends DiffCommand
+class MigrationsDiffFileDoctrineCommand extends DiffFileCommand
 {
     /**
      *
