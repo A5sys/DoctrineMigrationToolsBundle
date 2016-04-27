@@ -123,38 +123,6 @@ class DiffFileCommand extends \Doctrine\DBAL\Migrations\Tools\Console\Command\Di
 
     /**
      *
-     * @param Configuration $configuration
-     * @param array $sql
-     * @return type
-     */
-    protected function buildCodeFromSql(Configuration $configuration, array $sql)
-    {
-        $currentPlatform = $configuration->getConnection()->getDatabasePlatform()->getName();
-        $code = [];
-        foreach ($sql as $query) {
-            if (stripos($query, $configuration->getMigrationsTableName()) !== false) {
-                continue;
-            }
-            $code[] = sprintf("\$this->addSql(%s);", var_export($query, true));
-        }
-
-        if (!empty($code)) {
-            array_unshift(
-                $code,
-                sprintf(
-                    "\$this->abortIf(\$this->connection->getDatabasePlatform()->getName() != %s, %s);",
-                    var_export($currentPlatform, true),
-                    var_export(sprintf("Migration can only be executed safely on '%s'.", $currentPlatform), true)
-                ),
-                ""
-            );
-        }
-
-        return implode("\n", $code);
-    }
-
-    /**
-     *
      * @return type
      */
     protected function getSchemaProvider()
@@ -180,5 +148,55 @@ class DiffFileCommand extends \Doctrine\DBAL\Migrations\Tools\Console\Command\Di
         $pos = strpos($name, '.');
 
         return false === $pos ? $name : substr($name, $pos + 1);
+    }
+
+    /**
+     *
+     * @param Configuration $configuration
+     * @param array $sql
+     * @param type $formatted
+     * @param type $lineLength
+     * @return type
+     * @throws \InvalidArgumentException
+     */
+    private function buildCodeFromSql(Configuration $configuration, array $sql, $formatted = false, $lineLength = 120)
+    {
+        $currentPlatform = $configuration->getConnection()->getDatabasePlatform()->getName();
+        $code = [];
+        foreach ($sql as $query) {
+            if (stripos($query, $configuration->getMigrationsTableName()) !== false) {
+                continue;
+            }
+
+            if ($formatted) {
+                if (!class_exists('\SqlFormatter')) {
+                    throw new \InvalidArgumentException(
+                        'The "--formatted" option can only be used if the sql formatter is installed.'.'Please run "composer require jdorn/sql-formatter".'
+                    );
+                }
+
+                $maxLength = $lineLength - 18 - 8; // max - php code length - indentation
+
+                if (strlen($query) > $maxLength) {
+                    $query = \SqlFormatter::format($query, false);
+                }
+            }
+
+            $code[] = sprintf("\$this->addSql(%s);", var_export($query, true));
+        }
+
+        if (!empty($code)) {
+            array_unshift(
+                $code,
+                sprintf(
+                    "\$this->abortIf(\$this->connection->getDatabasePlatform()->getName() != %s, %s);",
+                    var_export($currentPlatform, true),
+                    var_export(sprintf("Migration can only be executed safely on '%s'.", $currentPlatform), true)
+                ),
+                ""
+            );
+        }
+
+        return implode("\n", $code);
     }
 }
