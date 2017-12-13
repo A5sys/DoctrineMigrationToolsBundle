@@ -57,7 +57,7 @@ class DiffFileCommand extends \Doctrine\DBAL\Migrations\Tools\Console\Command\Di
         $down = $this->buildCodeFromSql($configuration, $fromSchema->getMigrateFromSql($toSchema, $platform));
 
         if (!$up && !$down) {
-            $output->writeln('No changes detected in your mapping information.', 'ERROR');
+            $output->writeln('No changes detected in your mapping information.');
 
             return;
         }
