@@ -1,0 +1,4 @@
+services:
+  A5sys\DoctrineMigrationToolsBundle\Command\MigrationsDiffFileDoctrineCommand:
+    public: false
+    tags: [console.command]
