@@ -4,7 +4,7 @@ Tools for the doctrine migration bundle
 
 # Installation
 
-    composer require a5sys/doctrine-migration-tools-bundle:dev-master
+    composer require a5sys/doctrine-migration-tools-bundle
 
 # Generate versions from schema file for the doctrine-migration
 The diff command of doctrine generate the version file from the diff between your database and the current schema.
