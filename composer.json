@@ -1,5 +1,6 @@
 {
     "name": "a5sys/doctrine-migration-tools-bundle",
+    "description": "Ease use of doctrine migrations",
     "type": "symfony-bundle",
     "autoload": {
         "psr-4": { "A5sys\\DoctrineMigrationToolsBundle\\": "" }
@@ -7,7 +8,7 @@
     "license": "MIT",
     "require": {
         "php": ">=7.1",
-        "symfony/framework-bundle": "~4.0",
+        "symfony/framework-bundle": "~3.4|~4.0",
         "doctrine/doctrine-bundle": "~1.0",
         "doctrine/migrations": "~1.6",
         "doctrine/doctrine-migrations-bundle": "~1.3"
