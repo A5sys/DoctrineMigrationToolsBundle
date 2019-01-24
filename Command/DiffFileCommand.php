@@ -6,6 +6,7 @@ use Doctrine\DBAL\Migrations\Configuration\Configuration;
 use Doctrine\DBAL\Version as DbalVersion;
 use Doctrine\DBAL\Migrations\Provider\OrmSchemaProvider;
 use Symfony\Component\Console\Input\InputInterface;
+use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Component\Finder\Finder;
@@ -16,6 +17,13 @@ use Symfony\Component\Finder\Finder;
  */
 class DiffFileCommand extends \Doctrine\DBAL\Migrations\Tools\Console\Command\DiffCommand
 {
+    protected function configure()
+    {
+        parent::configure();
+
+        $this->addOption('check', null, InputOption::VALUE_NONE, 'Check that all migrations have been created.')
+    }
+
     /**
      *
      * @param InputInterface  $input
@@ -40,6 +48,8 @@ class DiffFileCommand extends \Doctrine\DBAL\Migrations\Tools\Console\Command\Di
                 ->setFilterSchemaAssetsExpression($filterExpr);
         }
 
+        $checkOnly = $input->getOption('check');
+
         $fromSchema = $this->getLastSchemaDefinition($configuration);
         $toSchema = $this->getSchemaProvider()->createSchema();
 
@@ -60,6 +70,11 @@ class DiffFileCommand extends \Doctrine\DBAL\Migrations\Tools\Console\Command\Di
             $output->writeln('No changes detected in your mapping information.');
 
             return;
+        }
+
+        if ($checkOnly) {
+            $output->writeln('<error>Changes detected in your mapping information!</error>');
+            exit(1);
         }
 
         $version = date('YmdHis');
