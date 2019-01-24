@@ -21,7 +21,7 @@ class DiffFileCommand extends \Doctrine\DBAL\Migrations\Tools\Console\Command\Di
     {
         parent::configure();
 
-        $this->addOption('check', null, InputOption::VALUE_NONE, 'Check that all migrations have been created.')
+        $this->addOption('check', null, InputOption::VALUE_NONE, 'Check that all migrations have been created.');
     }
 
     /**
