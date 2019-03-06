@@ -10,7 +10,7 @@
         "php": ">=7.1",
         "symfony/framework-bundle": "~3.4|~4.0",
         "doctrine/doctrine-bundle": "~1.0",
-        "doctrine/migrations": "~1.6",
+        "doctrine/migrations": ">=1.6",
         "doctrine/doctrine-migrations-bundle": "~1.3"
     }
 }
