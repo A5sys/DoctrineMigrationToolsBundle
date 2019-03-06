@@ -36,7 +36,9 @@ class MigrationsDiffFileDoctrineCommand extends DiffFileCommand
         $configuration = $this->getMigrationConfiguration($input, $output);
         DoctrineCommand::configureMigrations($application->getKernel()->getContainer(), $configuration);
 
-        parent::initialize($input, $output);
+        $this->configuration = $this->getMigrationConfiguration($input, $output);
+        $this->initializeDependencies();
+        $this->configuration->validate();
     }
 
     public function execute(InputInterface $input, OutputInterface $output) : ?int
@@ -47,5 +49,12 @@ class MigrationsDiffFileDoctrineCommand extends DiffFileCommand
         }
 
         return parent::execute($input, $output);
+    }
+
+    private function initializeDependencies() : void
+    {
+        $this->connection          = $this->configuration->getConnection();
+        $this->dependencyFactory   = $this->configuration->getDependencyFactory();
+        $this->migrationRepository = $this->dependencyFactory->getMigrationRepository();
     }
 }
