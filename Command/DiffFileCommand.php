@@ -2,87 +2,120 @@
 
 namespace A5sys\DoctrineMigrationToolsBundle\Command;
 
-use Doctrine\DBAL\Migrations\Configuration\Configuration;
-use Doctrine\DBAL\Version as DbalVersion;
-use Doctrine\DBAL\Migrations\Provider\OrmSchemaProvider;
+use Doctrine\DBAL\Schema\AbstractSchemaManager;
+use Doctrine\DBAL\Schema\Schema;
+use Doctrine\DBAL\Types\Type;
+use Doctrine\Migrations\Generator\DiffGenerator;
+use Doctrine\Migrations\Generator\Exception\NoChangesDetected;
+use Doctrine\Migrations\Provider\SchemaProviderInterface;
+use Doctrine\Migrations\Tools\Console\Helper\MigrationDirectoryHelper;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Component\Finder\Finder;
+use Doctrine\Migrations\Provider\OrmSchemaProvider;
 
 /**
  * Command to generate a version file for doctrine migration using a file containing the schema definition
  *
  */
-class DiffFileCommand extends \Doctrine\DBAL\Migrations\Tools\Console\Command\DiffCommand
+class DiffFileCommand extends \Doctrine\Migrations\Tools\Console\Command\DiffCommand
 {
-    protected function configure()
+    private $schemaManager;
+
+    protected function configure(): void
     {
         parent::configure();
 
+        $this
+            ->setName('migrations:diff-file')
+            ->setAliases(['diff-file'])
+            ->setDescription('Generate a migration by comparing your current entities to your file mapping information.');
         $this->addOption('check', null, InputOption::VALUE_NONE, 'Check that all migrations have been created.');
     }
 
-    /**
-     *
-     * @param InputInterface  $input
-     * @param OutputInterface $output
-     * @return type
-     * @throws \InvalidArgumentException
-     */
-    public function execute(InputInterface $input, OutputInterface $output)
+    public function execute(InputInterface $input, OutputInterface $output): ?int
     {
-        $isDbalOld = (DbalVersion::compare('2.2.0') > 0);
-        $configuration = $this->getMigrationConfiguration($input, $output);
-
-        $conn = $configuration->getConnection();
-        $platform = $conn->getDatabasePlatform();
-
-        if ($filterExpr = $input->getOption('filter-expression')) {
-            if ($isDbalOld) {
-                throw new \InvalidArgumentException('The "--filter-expression" option can only be used as of Doctrine DBAL 2.2');
-            }
-
-            $conn->getConfiguration()
-                ->setFilterSchemaAssetsExpression($filterExpr);
-        }
-
         $checkOnly = $input->getOption('check');
 
-        $fromSchema = $this->getLastSchemaDefinition($configuration);
-        $toSchema = $this->getSchemaProvider()->createSchema();
+        $configuration = $this->getMigrationConfiguration($input, $output);
+        $lastSchema = $this->getLastSchemaDefinition($configuration);
+        $this->generateSchemaManager($lastSchema);
 
-        //Not using value from options, because filters can be set from config.yml
-        if (!$isDbalOld && $filterExpr = $conn->getConfiguration()->getFilterSchemaAssetsExpression()) {
-            foreach ($toSchema->getTables() as $table) {
-                $tableName = $table->getName();
-                if (!preg_match($filterExpr, $this->resolveTableName($tableName))) {
-                    $toSchema->dropTable($tableName);
-                }
+        $toSchema = $this->createToSchema();
+
+        $versionNumber = $this->configuration->generateVersionNumber();
+
+        $noChanges = false;
+
+        try {
+            $return = parent::execute($input, $output);
+        } catch (NoChangesDetected $ex) {
+            if ($checkOnly === false) {
+                throw $ex;
             }
-        }
 
-        $up = $this->buildCodeFromSql($configuration, $fromSchema->getMigrateToSql($toSchema, $platform));
-        $down = $this->buildCodeFromSql($configuration, $fromSchema->getMigrateFromSql($toSchema, $platform));
-
-        if (!$up && !$down) {
-            $output->writeln('No changes detected in your mapping information.');
-
-            return;
+            $noChanges = true;
         }
 
         if ($checkOnly) {
-            $output->writeln('<error>Changes detected in your mapping information!</error>');
-            exit(1);
+            if ($noChanges === false) {
+                $output->writeln('<error>Changes detected in your mapping information!</error>');
+                exit(1);
+            } else {
+                $output->writeln('<info>NO Changes detected in your mapping information!</info>');
+                exit(0);
+            }
         }
 
-        $version = date('YmdHis');
-        $path = $this->generateMigration($configuration, $input, $version, $up, $down);
+        $this->saveCurrentSchema($configuration, $toSchema, $versionNumber);
 
-        $this->saveCurrentSchema($configuration, $toSchema, $version);
+        return $return;
+    }
 
-        $output->writeln(sprintf('Generated new migration class to "<info>%s</info>" from schema differences.', $path));
+    protected function createMigrationDiffGenerator() : DiffGenerator
+    {
+        return new DiffGenerator(
+            $this->connection->getConfiguration(),
+            $this->schemaManager,
+            $this->getSchemaProvider(),
+            $this->connection->getDatabasePlatform(),
+            $this->dependencyFactory->getMigrationGenerator(),
+            $this->dependencyFactory->getMigrationSqlGenerator()
+        );
+    }
+
+    private function generateSchemaManager(Schema $lastSchema): void
+    {
+        $this->schemaManager = new class($lastSchema) extends AbstractSchemaManager {
+            private $lastSchema = null;
+
+            public function _getPortableTableColumnDefinition($tableColumn)
+            {
+
+            }
+            public function __construct($lastSchema)
+            {
+                $this->lastSchema = $lastSchema;
+            }
+
+            public function createSchema(): Schema
+            {
+                return $this->lastSchema;
+            }
+        };
+    }
+
+    private function getSchemaProvider() : SchemaProviderInterface
+    {
+        if ($this->schemaProvider === null) {
+            $this->schemaProvider = new OrmSchemaProvider(
+                $this->getHelper('entityManager')->getEntityManager()
+            );
+        }
+
+        return $this->schemaProvider;
     }
 
     /**
@@ -90,9 +123,9 @@ class DiffFileCommand extends \Doctrine\DBAL\Migrations\Tools\Console\Command\Di
      *
      * @param type $configuration
      */
-    protected function getLastSchemaDefinition($configuration)
+    protected function getLastSchemaDefinition($configuration): Schema
     {
-        $migrationDirectoryHelper = new \Doctrine\DBAL\Migrations\Tools\Console\Helper\MigrationDirectoryHelper($configuration);
+        $migrationDirectoryHelper = new MigrationDirectoryHelper($configuration);
         $dir = $migrationDirectoryHelper->getMigrationDirectory().'/SchemaVersion';
 
         //create the directory if required
@@ -114,7 +147,10 @@ class DiffFileCommand extends \Doctrine\DBAL\Migrations\Tools\Console\Command\Di
             $lastSchemaFile = end($filesArray);
             $content = $lastSchemaFile->getContents();
 
+            /** @var Schema $lastSchema */
             $lastSchema = unserialize($content);
+
+            $this->updateSchameTypes($lastSchema);
         }
 
         return $lastSchema;
@@ -126,9 +162,9 @@ class DiffFileCommand extends \Doctrine\DBAL\Migrations\Tools\Console\Command\Di
      * @param type $schema
      * @param type $version
      */
-    protected function saveCurrentSchema($configuration, $schema, $version)
+    private function saveCurrentSchema($configuration, $schema, $version)
     {
-        $migrationDirectoryHelper = new \Doctrine\DBAL\Migrations\Tools\Console\Helper\MigrationDirectoryHelper($configuration);
+        $migrationDirectoryHelper = new MigrationDirectoryHelper($configuration);
         $dir = $migrationDirectoryHelper->getMigrationDirectory().'/SchemaVersion';
 
         $filepath = $dir.'/Schema'.$version;
@@ -136,82 +172,24 @@ class DiffFileCommand extends \Doctrine\DBAL\Migrations\Tools\Console\Command\Di
         file_put_contents($filepath, serialize($schema));
     }
 
-    /**
-     *
-     * @return type
-     */
-    protected function getSchemaProvider()
+    private function createToSchema() : Schema
     {
-        if (!$this->schemaProvider) {
-            $this->schemaProvider = new OrmSchemaProvider($this->getHelper('entityManager')->getEntityManager());
-        }
-
-        return $this->schemaProvider;
+        return  $this->getSchemaProvider()->createSchema();
     }
 
-    /**
-     * Resolve a table name from its fully qualified name. The `$name` argument
-     * comes from Doctrine\DBAL\Schema\Table#getName which can sometimes return
-     * a namespaced name with the form `{namespace}.{tableName}`. This extracts
-     * the table name from that.
-     *
-     * @param   string $name
-     * @return  string
-     */
-    protected function resolveTableName($name)
+    private function updateSchameTypes(Schema $schema): void
     {
-        $pos = strpos($name, '.');
+        $typeCodeMap = array_flip(Type::getTypesMap());
 
-        return false === $pos ? $name : substr($name, $pos + 1);
-    }
-
-    /**
-     *
-     * @param Configuration $configuration
-     * @param array $sql
-     * @param type $formatted
-     * @param type $lineLength
-     * @return type
-     * @throws \InvalidArgumentException
-     */
-    private function buildCodeFromSql(Configuration $configuration, array $sql, $formatted = false, $lineLength = 120)
-    {
-        $currentPlatform = $configuration->getConnection()->getDatabasePlatform()->getName();
-        $code = [];
-        foreach ($sql as $query) {
-            if (stripos($query, $configuration->getMigrationsTableName()) !== false) {
-                continue;
+        $tables = $schema->getTables();
+        foreach ($tables as $table) {
+            foreach ($table->getColumns() as $column) {
+                $type = $column->getType();
+                $typeClass = get_class($type);
+                $typeCode = $typeCodeMap[$typeClass];
+                $currentType = Type::getType($typeCode);
+                $column->setType($currentType);
             }
-
-            if ($formatted) {
-                if (!class_exists('\SqlFormatter')) {
-                    throw new \InvalidArgumentException(
-                        'The "--formatted" option can only be used if the sql formatter is installed.'.'Please run "composer require jdorn/sql-formatter".'
-                    );
-                }
-
-                $maxLength = $lineLength - 18 - 8; // max - php code length - indentation
-
-                if (strlen($query) > $maxLength) {
-                    $query = \SqlFormatter::format($query, false);
-                }
-            }
-
-            $code[] = sprintf("\$this->addSql(%s);", var_export($query, true));
         }
-
-        if (!empty($code)) {
-            array_unshift(
-                $code,
-                sprintf(
-                    "\$this->abortIf(\$this->connection->getDatabasePlatform()->getName() != %s, %s);",
-                    var_export($currentPlatform, true),
-                    var_export(sprintf("Migration can only be executed safely on '%s'.", $currentPlatform), true)
-                ),
-                ""
-            );
-        }
-
-        return implode("\n", $code);
     }
 }
