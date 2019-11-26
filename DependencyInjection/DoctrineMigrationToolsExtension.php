@@ -17,9 +17,6 @@ class DoctrineMigrationToolsExtension extends Extension
      */
     public function load(array $configs, ContainerBuilder $container)
     {
-        $configuration = new Configuration();
-        $this->processConfiguration($configuration, $configs);
-
         $locator = new FileLocator(__DIR__.'/../Resources/config/');
         $loader  = new YamlFileLoader($container, $locator);
 
