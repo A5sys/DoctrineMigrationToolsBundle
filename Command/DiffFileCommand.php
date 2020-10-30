@@ -7,6 +7,7 @@ use Doctrine\DBAL\Schema\Schema;
 use Doctrine\DBAL\Types\Type;
 use Doctrine\Migrations\Generator\DiffGenerator;
 use Doctrine\Migrations\Generator\Exception\NoChangesDetected;
+use Doctrine\Migrations\Provider\EmptySchemaProvider;
 use Doctrine\Migrations\Provider\SchemaProviderInterface;
 use Doctrine\Migrations\Tools\Console\Helper\MigrationDirectoryHelper;
 use Symfony\Component\Console\Input\InputInterface;
@@ -82,7 +83,8 @@ class DiffFileCommand extends \Doctrine\Migrations\Tools\Console\Command\DiffCom
             $this->getSchemaProvider(),
             $this->connection->getDatabasePlatform(),
             $this->dependencyFactory->getMigrationGenerator(),
-            $this->dependencyFactory->getMigrationSqlGenerator()
+            $this->dependencyFactory->getMigrationSqlGenerator(),
+            new EmptySchemaProvider($this->schemaManager)
         );
     }
 
